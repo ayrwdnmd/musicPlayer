@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/21.png</file>
+        <file>assets/22.png</file>
+        <file>assets/23.png</file>
+        <file>assets/a.1.png</file>
+        <file>assets/a.3.png</file>
+        <file>assets/a.5.png</file>
+        <file>assets/a.6.png</file>
+        <file>assets/a.22.png</file>
+        <file>assets/a.41.png</file>
+        <file>assets/a.42.png</file>
+        <file>assets/a.23.png</file>
+        <file>assets/a.2.1.png</file>
+        <file>assets/a.2.2.png</file>
+        <file>assets/searchBtn.png</file>
+        <file>assets/title.png</file>
+    </qresource>
+</RCC>

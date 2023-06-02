@@ -1,0 +1,243 @@
+//槽函数
+void Widget::replyFinished(QNetworkReply *reply)
+{
+    //获取响应状态
+    QVariant statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+
+    if(reply->error() == QNetworkReply::NoError)
+    {
+        QByteArray bytes = reply->readAll();
+        QString result(bytes);
+        //qDebug()<<result;
+        parseJson(result);    //用于解析api接口返回的json
+    }
+    else
+    {
+        qDebug()<<"搜索失败";
+    }
+}
+
+
+//点击搜索的槽函数
+void Widget::search(QString str)
+{
+    //使用api接口
+    QString url = QString("http://mobilecdn.kugou.com/api/v3/search/song?format=json"
+                          "&keyword=%1&page=1&pagesize=18").arg(str);
+    networkRequest->setUrl(QUrl(url));
+    networkManager->get(*networkRequest);
+}
+
+void Widget::parseJson(QString json)
+{
+    QString songName;
+    QString singerName;
+    QString hashStr;    //hash
+    QString albumName;  //专辑名称
+    int duration;
+    QByteArray byteArray;
+    QJsonParseError jsonError;
+    //byteArray.append(json)    将JSON格式的数据附加到字节数组
+    //fromJson  返回一个包含JSON数据的QJsonDocument对象
+    QJsonDocument parseDoucment = QJsonDocument::fromJson(byteArray.append(json),&jsonError);
+
+    if (jsonError.error == QJsonParseError::NoError)
+       {
+            //判断QJsonDocument是否包含对象
+           if (parseDoucment.isObject())
+           {
+               QJsonObject rootObj = parseDoucment.object();
+               //判断是否存在键“data”
+               if (rootObj.contains("data"))
+               {
+                   //获取键“data”的值
+                   QJsonValue valuedata = rootObj.value("data");
+                   //判断QJsonValue是否包含对象
+                   if (valuedata.isObject())
+                   {
+                       //将值转化为对象
+                       QJsonObject valuedataObject = valuedata.toObject();
+                       if (valuedataObject.contains("info"))
+                       {
+                           QJsonValue valueArray = valuedataObject.value("info");
+                           //判断值是否为数组
+                           if (valueArray.isArray())
+                           {
+                               //将值转化为QJsonArray
+                               QJsonArray array = valueArray.toArray();
+                               int size = array.size();
+                               for (int i = 0; i < size; i++)
+                               {
+                                   QJsonValue value = array.at(i);
+                                   if (value.isObject())
+                                   {
+                                       QJsonObject object = value.toObject();
+                                       if (object.contains("songname_original"))//歌曲名
+                                       {
+                                           QJsonValue AlbumID_value = object.take("songname_original");
+                                           if (AlbumID_value.isString())
+                                           {
+                                               songName = AlbumID_value.toString();
+                                           }
+                                       }
+                                       if (object.contains("singername"))//歌手
+                                       {
+                                           QJsonValue AlbumID_value = object.take("singername");
+                                           if (AlbumID_value.isString())
+                                           {
+                                               singerName = AlbumID_value.toString();
+                                           }
+                                       }
+                                       if (object.contains("album_name"))//专辑
+                                       {
+                                           QJsonValue AlbumID_value = object.take("album_name");
+                                           if (AlbumID_value.isString())
+                                           {
+                                               albumName = AlbumID_value.toString();
+                                           }
+                                       }
+                                       if (object.contains("hash")) //hash
+                                       {
+                                           QJsonValue FileHash_value = object.take("hash");
+                                           if (FileHash_value.isString())
+                                           {
+                                               //并未使用
+                                               hashStr = FileHash_value.toString();
+                                               //用Vector保存每首歌曲的hash
+                                               vectorList.append(FileHash_value.toString());
+                                           }
+                                       }
+                                       if (object.contains("album_id"))
+                                       {
+                                           QJsonValue FileHash_value = object.take("album_id");
+                                           if (FileHash_value.isString())
+                                           {
+                                               //用Vector保存每首歌曲的album_id
+                                               vectorId.append(FileHash_value.toString());
+                                           }
+                                       }
+                                       if (object.contains("duration"))//时长
+                                       {
+                                          QJsonValue AlbumID_value = object.take("duration").toInt();
+                                          duration = AlbumID_value.toInt();
+                                       }
+                                       //将解析出的内容放到列表中
+                                       ui->tableWidget->setItem(i,0,new QTableWidgetItem(songName));
+                                       //文字居中
+                                       //ui->tableWidget->item(i,0)->setTextAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+                                       ui->tableWidget->setItem(i,1,new QTableWidgetItem(singerName));
+                                       //ui->tableWidget->item(i,1)->setTextAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+                                       ui->tableWidget->setItem(i,2,new QTableWidgetItem(albumName));
+                                       //ui->tableWidget->item(i,2)->setTextAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+                                       QString time = QString("%1:%2").arg(duration/60).arg(duration%60);
+                                       ui->tableWidget->setItem(i,3,new QTableWidgetItem(time));
+                                       //ui->tableWidget->item(i,3)->setTextAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
+           }
+       }
+       else
+       {
+           qDebug() << jsonError.errorString();
+       }
+}
+
+void Widget::doubleClickedTable(int row, int column)
+{
+    //歌曲请求 row 是行号
+    QString url =QString("https://www.kugou.com/yy/index.php?r=play/getdata"
+    "&hash=%1&album_id=%2&_=1497972864535").arg(vectorList.at(row)).arg(vectorId.at(row));
+    networkRequest2->setUrl(QUrl(url));
+    //这句话很重要，我们手动复制url放到浏览器可以获取json，但是通过代码不行，必须加上下面这句才可以
+    networkRequest2->setRawHeader("Cookie","kg_mid=233");
+    networkRequest2->setHeader(QNetworkRequest::CookieHeader, QVariant::fromValue(2333));
+    //networkRequest2->setUrl(QUrl(url));
+    networkManager2->get(*networkRequest2);
+}
+
+
+void Widget::parseJsonSongInfo(QString json)
+{
+    QString audio_name;//歌手-歌名
+    QString play_url;//播放地址
+    QString img;
+    QByteArray byte_array;
+    QJsonParseError json_error;
+    QJsonDocument parse_doucment = QJsonDocument::fromJson(byte_array.append(json), &json_error);
+    if(json_error.error == QJsonParseError::NoError)
+       {
+           if(parse_doucment.isObject())
+           {
+               QJsonObject rootObj = parse_doucment.object();
+               if(rootObj.contains("data"))
+               {
+                   QJsonValue valuedata = rootObj.value("data");
+                   if(valuedata.isObject())
+                   {
+                       QJsonObject valuedataObject = valuedata.toObject();
+                       QString play_urlStr("");
+                       if(valuedataObject.contains("play_url"))
+                       {
+                           QJsonValue play_url_value = valuedataObject.take("play_url");
+                           if(play_url_value.isString())
+                           {
+                               play_urlStr = play_url_value.toString();      //歌曲的url
+                               if(play_urlStr!="")
+                               {
+                                   qDebug()<<play_urlStr;
+                                   mediaPlayer->setMedia(QUrl(play_urlStr));
+                                   //player->setVolume(50);
+                                   mediaPlayer->play();
+                               }
+                           }
+                       }
+                       if(valuedataObject.contains("audio_name"))
+                       
+                           QJsonValue play_name_value = valuedataObject.take("audio_name");
+                           if(play_name_value.isString())
+                           {
+                               QString audio_name = play_name_value.toString();    //歌曲名字
+                               if(audio_name!="")
+                               {
+                                   //显示
+                                   qDebug()<<audio_name;
+                                   ui->label_2->setText(audio_name);
+                               }
+                           }
+                       }
+                        //下一篇的歌词获取也是在这里添加代码
+                        //图片显示代码在这里添加
+                   }
+               else
+                   {
+                       qDebug()<<"出错";
+                   }
+               }
+           }
+       }
+}
+
+void Widget::replyFinished2(QNetworkReply *reply)
+{
+
+    //获取响应的信息，状态码为200表示正常
+    QVariant status_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    //无错误返回
+    if(reply->error() == QNetworkReply::NoError)
+    {
+        QByteArray bytes = reply->readAll();  //获取字节
+        QString result(bytes);  //转化为字符串
+        parseJsonSongInfo(result);//解析json
+    }
+    else
+    {
+        //处理错误
+        qDebug()<<"歌曲播放失败";
+    }
+}
+
+
